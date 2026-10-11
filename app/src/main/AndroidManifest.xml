@@ -2,30 +2,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Internet para comunicação com Cloudflare e Gemini -->
-    <uses-permission
-        android:name="android.permission.INTERNET" />
-
-    <!-- Câmera para fotografar placas -->
-    <uses-permission
-        android:name="android.permission.CAMERA" />
-
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:label="Console Doctor"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:usesCleartextTraffic="false">
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
-            android:name="com.matheusoblack.consoledoctor.MainActivity"
+            android:name=".MainActivity"
             android:exported="true">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
