@@ -3,6 +3,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+
     <uses-permission android:name="android.permission.CAMERA" />
 
     <uses-feature
@@ -12,11 +13,10 @@
     <application
         android:allowBackup="true"
         android:label="Console Doctor"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:usesCleartextTraffic="false">
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.matheusoblack.consoledoctor.MainActivity"
             android:exported="true">
 
             <intent-filter>
