@@ -1,3 +1,4 @@
+
 package com.matheusoblack.consoledoctor;
 
 import android.app.Activity;
@@ -10,6 +11,7 @@ import android.graphics.Typeface;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
+import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.content.res.ColorStateList;
 import android.text.Editable;
@@ -23,6 +25,7 @@ import android.view.ScaleGestureDetector;
 import android.view.GestureDetector;
 import android.widget.*;
 import java.io.InputStream;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
 
@@ -37,6 +40,9 @@ public class MainActivity extends Activity {
 
     private static final String BOARD_IMAGE =
         "placas/Xbox_360_S,_model_1439_-_motherboard-0339.jpg";
+
+    private static final String GUIDE_IMAGE =
+        "placas/file_00000000d370820eb69565efcf3447d1.png";
 
     private static final String SOURCE =
         "https://consolemods.org/wiki/Xbox_360:Error_Codes";
@@ -535,8 +541,8 @@ public class MainActivity extends Activity {
 
         for (String[] e : entries) {
             if (!(e[0] + " " + e[1])
-                .toLowerCase()
-                .contains(query.trim().toLowerCase())) {
+                .toLowerCase(Locale.ROOT)
+                .contains(query.trim().toLowerCase(Locale.ROOT))) {
                 continue;
             }
 
@@ -591,14 +597,39 @@ public class MainActivity extends Activity {
         }
 
         if (e[0].equals("0003") && !model.equals("Fat")) {
+
             section(
-                "FOTO DA PLACA-MÃE",
-                "Waitsburg (Corona V3/V4) — PCB X862605-002.\n" +
-                "Imagem de referência. Os pontos de teste " +
-                "ainda não estão marcados."
+                "FOTO ORIGINAL DA PLACA",
+                "Waitsburg (família Corona) — PCB X862605-002.\n" +
+                "Fotografia real para reconhecer a disposição " +
+                "dos componentes da placa."
             );
 
-            showBoardImage();
+            showImage(
+                BOARD_IMAGE,
+                "FOTO ORIGINAL — TOQUE PARA AMPLIAR"
+            );
+
+            section(
+                "GUIA VISUAL — ÁREAS DO ERRO 0003",
+                "Ilustração com regiões destacadas para estudo. " +
+                "Toque na imagem para ampliar com dois dedos."
+            );
+
+            showImage(
+                GUIDE_IMAGE,
+                "VER GUIA VISUAL EM TELA CHEIA"
+            );
+
+            label(
+                "ATENÇÃO: este guia foi gerado por IA. " +
+                "As posições e identificações dos componentes " +
+                "não foram confirmadas em esquema elétrico. " +
+                "Não utilize as marcações como pontos de " +
+                "medição até validar a revisão da placa.",
+                14,
+                0xffFFBE7A
+            );
         }
 
         section("POSSÍVEIS ÁREAS COM DEFEITO", e[3]);
@@ -634,15 +665,21 @@ public class MainActivity extends Activity {
         button("VOLTAR AOS CÓDIGOS", () -> codes());
     }
 
-    private void showBoardImage() {
-        try {
-            InputStream stream = getAssets().open(BOARD_IMAGE);
+    private Bitmap loadBitmap(String filename) throws Exception {
+        try (InputStream stream = getAssets().open(filename)) {
             Bitmap bitmap = BitmapFactory.decodeStream(stream);
-            stream.close();
 
             if (bitmap == null) {
                 throw new Exception("Imagem inválida");
             }
+
+            return bitmap;
+        }
+    }
+
+    private void showImage(String filename, String caption) {
+        try {
+            Bitmap bitmap = loadBitmap(filename);
 
             ImageView preview = new ImageView(this);
             preview.setImageBitmap(bitmap);
@@ -652,28 +689,20 @@ public class MainActivity extends Activity {
 
             LinearLayout.LayoutParams params =
                 new LinearLayout.LayoutParams(-1, -2);
+
             params.setMargins(0, 12, 0, 12);
             body.addView(preview, params);
 
             preview.setOnClickListener(v -> openZoom(bitmap));
 
-            label(
-                "Toque na fotografia para abrir o zoom. " +
-                "Use dois dedos para ampliar e arraste para explorar.",
-                14, 0xffB7C9BE
-            );
-
-            label(
-                "Fotografia: Raimond Spekking / Wikimedia Commons. " +
-                "Consulte a página original para os termos da licença.",
-                12, 0xff9BAFA7
-            );
+            label(caption, 14, green);
 
         } catch (Exception ex) {
             label(
-                "Não foi possível carregar a fotografia. " +
-                "Confira o nome do arquivo em assets/placas.",
-                14, 0xffFFAA88
+                "Imagem não encontrada: " + filename +
+                "\nConfira o nome do arquivo no GitHub.",
+                14,
+                0xffFFAA88
             );
         }
     }
@@ -702,6 +731,7 @@ public class MainActivity extends Activity {
 
         FrameLayout.LayoutParams closeParams =
             new FrameLayout.LayoutParams(58, 58);
+
         closeParams.gravity = Gravity.TOP | Gravity.RIGHT;
         closeParams.setMargins(12, 70, 20, 12);
 
@@ -727,7 +757,6 @@ public class MainActivity extends Activity {
         private final GestureDetector gestureDetector;
 
         private float scale = 1f;
-        private float fitScale = 1f;
         private float lastX;
         private float lastY;
         private boolean dragging = false;
@@ -787,10 +816,16 @@ public class MainActivity extends Activity {
                                 e.getX(),
                                 e.getY()
                             );
+
                             scale = 2.5f;
                             fixBounds();
                             setImageMatrix(matrix);
                         }
+                        return true;
+                    }
+
+                    @Override
+                    public boolean onDown(MotionEvent e) {
                         return true;
                     }
                 }
@@ -819,7 +854,7 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            fitScale = Math.min(
+            float fitScale = Math.min(
                 (float) getWidth() / dw,
                 (float) getHeight() / dh
             );
@@ -840,13 +875,12 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            android.graphics.RectF rect =
-                new android.graphics.RectF(
-                    0,
-                    0,
-                    getDrawable().getIntrinsicWidth(),
-                    getDrawable().getIntrinsicHeight()
-                );
+            RectF rect = new RectF(
+                0,
+                0,
+                getDrawable().getIntrinsicWidth(),
+                getDrawable().getIntrinsicHeight()
+            );
 
             matrix.mapRect(rect);
 
