@@ -38,11 +38,8 @@ public class MainActivity extends Activity {
     private String model = "Slim / Super Slim";
     private String page = "home";
 
-    private static final String BOARD_IMAGE =
-        "placas/Xbox_360_S,_model_1439_-_motherboard-0339.jpg";
-
     private static final String GUIDE_IMAGE =
-        "placas/file_00000000d370820eb69565efcf3447d1.png";
+        "placas/file_00000000e1c0820ea38828394eb1f40e.png";
 
     private static final String SOURCE =
         "https://consolemods.org/wiki/Xbox_360:Error_Codes";
@@ -599,34 +596,25 @@ public class MainActivity extends Activity {
         if (e[0].equals("0003") && !model.equals("Fat")) {
 
             section(
-                "FOTO ORIGINAL DA PLACA",
-                "Waitsburg (família Corona) — PCB X862605-002.\n" +
-                "Fotografia real para reconhecer a disposição " +
-                "dos componentes da placa."
-            );
-
-            showImage(
-                BOARD_IMAGE,
-                "FOTO ORIGINAL — TOQUE PARA AMPLIAR"
-            );
-
-            section(
-                "GUIA VISUAL — ÁREAS DO ERRO 0003",
-                "Ilustração com regiões destacadas para estudo. " +
-                "Toque na imagem para ampliar com dois dedos."
+                "ÁREAS SUSPEITAS — ERRO 0003",
+                "Guia visual ilustrativo das possíveis regiões " +
+                "relacionadas à alimentação de 3,3 V.\n\n" +
+                "A imagem apresenta seis áreas para estudo, " +
+                "sem mostrar a placa inteira."
             );
 
             showImage(
                 GUIDE_IMAGE,
-                "VER GUIA VISUAL EM TELA CHEIA"
+                "TOQUE NA IMAGEM PARA AMPLIAR"
             );
 
             label(
-                "ATENÇÃO: este guia foi gerado por IA. " +
-                "As posições e identificações dos componentes " +
-                "não foram confirmadas em esquema elétrico. " +
-                "Não utilize as marcações como pontos de " +
-                "medição até validar a revisão da placa.",
+                "ATENÇÃO: imagem gerada por inteligência artificial. " +
+                "Os componentes, suas posições e identificações " +
+                "não foram confirmados na placa real ou no esquema " +
+                "elétrico. Não utilize esta imagem para escolher " +
+                "pontos de medição, remover componentes ou " +
+                "executar reparos sem validação técnica.",
                 14,
                 0xffFFBE7A
             );
