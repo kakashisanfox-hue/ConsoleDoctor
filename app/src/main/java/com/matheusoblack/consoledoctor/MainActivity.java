@@ -1,4 +1,3 @@
-
 package com.matheusoblack.consoledoctor;
 
 import android.app.Activity;
@@ -10,6 +9,7 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.graphics.drawable.GradientDrawable;
 import android.content.res.ColorStateList;
 import android.text.Editable;
@@ -17,12 +17,17 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
+import android.view.WindowInsets;
+import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
+import android.view.GestureDetector;
 import android.widget.*;
 import java.io.InputStream;
 
 public class MainActivity extends Activity {
 
     private LinearLayout body;
+
     private final int bg = 0xff0C1218;
     private final int green = 0xff4AF0A1;
     private final int white = Color.WHITE;
@@ -32,6 +37,9 @@ public class MainActivity extends Activity {
 
     private static final String BOARD_IMAGE =
         "placas/Xbox_360_S,_model_1439_-_motherboard-0339.jpg";
+
+    private static final String SOURCE =
+        "https://consolemods.org/wiki/Xbox_360:Error_Codes";
 
     private final String[][] entries = {
 
@@ -279,8 +287,20 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            );
+        }
+
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(Color.BLACK);
+
         home();
     }
 
@@ -296,8 +316,8 @@ public class MainActivity extends Activity {
 
             if (android.os.Build.VERSION.SDK_INT >= 30) {
                 android.graphics.Insets bars = insets.getInsets(
-                    android.view.WindowInsets.Type.statusBars()
-                    | android.view.WindowInsets.Type.navigationBars()
+                    WindowInsets.Type.statusBars()
+                    | WindowInsets.Type.navigationBars()
                 );
                 top = bars.top;
                 bottom = bars.bottom;
@@ -393,9 +413,17 @@ public class MainActivity extends Activity {
     }
 
     private void open(String url) {
-        startActivity(
-            new Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        );
+        try {
+            startActivity(
+                new Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            );
+        } catch (Exception ex) {
+            Toast.makeText(
+                this,
+                "Não foi possível abrir o navegador.",
+                Toast.LENGTH_SHORT
+            ).show();
+        }
     }
 
     private void home() {
@@ -436,7 +464,10 @@ public class MainActivity extends Activity {
 
         Spinner spin = new Spinner(this);
 
-        String[] models = {"Slim / Super Slim", "Fat"};
+        String[] models = {
+            "Slim / Super Slim",
+            "Fat"
+        };
 
         ArrayAdapter<String> a = new ArrayAdapter<>(
             this,
@@ -563,8 +594,8 @@ public class MainActivity extends Activity {
             section(
                 "FOTO DA PLACA-MÃE",
                 "Waitsburg (Corona V3/V4) — PCB X862605-002.\n" +
-                "Imagem de referência para identificação. " +
-                "Os pontos de teste ainda não estão marcados."
+                "Imagem de referência. Os pontos de teste " +
+                "ainda não estão marcados."
             );
 
             showBoardImage();
@@ -584,14 +615,8 @@ public class MainActivity extends Activity {
         );
 
         button(
-            "VER REPAROS EM PORTUGUÊS",
-            () -> open(
-                "https://www.google.com/search?q=" +
-                Uri.encode(
-                    "Xbox 360 " + model +
-                    " erro " + e[0] + " reparo"
-                )
-            )
+            "CONSULTAR DOCUMENTAÇÃO TÉCNICA",
+            () -> open(SOURCE)
         );
 
         button(
@@ -630,32 +655,17 @@ public class MainActivity extends Activity {
             params.setMargins(0, 12, 0, 12);
             body.addView(preview, params);
 
-            preview.setOnClickListener(v -> {
-                Dialog dialog = new Dialog(this);
-
-                ImageView enlarged = new ImageView(this);
-                enlarged.setImageBitmap(bitmap);
-                enlarged.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                enlarged.setBackgroundColor(Color.BLACK);
-
-                dialog.setContentView(enlarged);
-                dialog.show();
-
-                Window window = dialog.getWindow();
-                if (window != null) {
-                    window.setLayout(-1, -1);
-                }
-            });
+            preview.setOnClickListener(v -> openZoom(bitmap));
 
             label(
-                "Toque na fotografia para ampliar.",
+                "Toque na fotografia para abrir o zoom. " +
+                "Use dois dedos para ampliar e arraste para explorar.",
                 14, 0xffB7C9BE
             );
 
             label(
-                "Crédito da fotografia: Raimond Spekking / " +
-                "Wikimedia Commons. Consulte a página original " +
-                "para os termos da licença.",
+                "Fotografia: Raimond Spekking / Wikimedia Commons. " +
+                "Consulte a página original para os termos da licença.",
                 12, 0xff9BAFA7
             );
 
@@ -665,6 +675,253 @@ public class MainActivity extends Activity {
                 "Confira o nome do arquivo em assets/placas.",
                 14, 0xffFFAA88
             );
+        }
+    }
+
+    private void openZoom(Bitmap bitmap) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        FrameLayout frame = new FrameLayout(this);
+        frame.setBackgroundColor(Color.BLACK);
+
+        ZoomImage zoom = new ZoomImage(this);
+        zoom.setImageBitmap(bitmap);
+
+        frame.addView(
+            zoom,
+            new FrameLayout.LayoutParams(-1, -1)
+        );
+
+        TextView close = new TextView(this);
+        close.setText("✕");
+        close.setTextColor(Color.WHITE);
+        close.setTextSize(25);
+        close.setGravity(Gravity.CENTER);
+        close.setBackgroundColor(0xcc15252a);
+
+        FrameLayout.LayoutParams closeParams =
+            new FrameLayout.LayoutParams(58, 58);
+        closeParams.gravity = Gravity.TOP | Gravity.RIGHT;
+        closeParams.setMargins(12, 70, 20, 12);
+
+        frame.addView(close, closeParams);
+        close.setOnClickListener(v -> dialog.dismiss());
+
+        dialog.setContentView(frame);
+        dialog.show();
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawableResource(
+                android.R.color.black
+            );
+            window.setLayout(-1, -1);
+        }
+    }
+
+    private class ZoomImage extends ImageView {
+
+        private final Matrix matrix = new Matrix();
+        private final ScaleGestureDetector scaleDetector;
+        private final GestureDetector gestureDetector;
+
+        private float scale = 1f;
+        private float fitScale = 1f;
+        private float lastX;
+        private float lastY;
+        private boolean dragging = false;
+
+        ZoomImage(Activity context) {
+            super(context);
+
+            setScaleType(ScaleType.MATRIX);
+            setBackgroundColor(Color.BLACK);
+
+            scaleDetector = new ScaleGestureDetector(
+                context,
+                new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    @Override
+                    public boolean onScale(
+                        ScaleGestureDetector detector
+                    ) {
+                        float factor = detector.getScaleFactor();
+                        float next = scale * factor;
+
+                        if (next < 1f) {
+                            factor = 1f / scale;
+                            next = 1f;
+                        }
+
+                        if (next > 8f) {
+                            factor = 8f / scale;
+                            next = 8f;
+                        }
+
+                        matrix.postScale(
+                            factor,
+                            factor,
+                            detector.getFocusX(),
+                            detector.getFocusY()
+                        );
+
+                        scale = next;
+                        fixBounds();
+                        setImageMatrix(matrix);
+                        return true;
+                    }
+                }
+            );
+
+            gestureDetector = new GestureDetector(
+                context,
+                new GestureDetector.SimpleOnGestureListener() {
+                    @Override
+                    public boolean onDoubleTap(MotionEvent e) {
+                        if (scale > 1.05f) {
+                            resetImage();
+                        } else {
+                            matrix.postScale(
+                                2.5f,
+                                2.5f,
+                                e.getX(),
+                                e.getY()
+                            );
+                            scale = 2.5f;
+                            fixBounds();
+                            setImageMatrix(matrix);
+                        }
+                        return true;
+                    }
+                }
+            );
+        }
+
+        @Override
+        protected void onSizeChanged(
+            int w, int h, int oldw, int oldh
+        ) {
+            super.onSizeChanged(w, h, oldw, oldh);
+            resetImage();
+        }
+
+        private void resetImage() {
+            if (getDrawable() == null ||
+                getWidth() == 0 ||
+                getHeight() == 0) {
+                return;
+            }
+
+            int dw = getDrawable().getIntrinsicWidth();
+            int dh = getDrawable().getIntrinsicHeight();
+
+            if (dw <= 0 || dh <= 0) {
+                return;
+            }
+
+            fitScale = Math.min(
+                (float) getWidth() / dw,
+                (float) getHeight() / dh
+            );
+
+            float dx = (getWidth() - dw * fitScale) / 2f;
+            float dy = (getHeight() - dh * fitScale) / 2f;
+
+            matrix.reset();
+            matrix.postScale(fitScale, fitScale);
+            matrix.postTranslate(dx, dy);
+
+            scale = 1f;
+            setImageMatrix(matrix);
+        }
+
+        private void fixBounds() {
+            if (getDrawable() == null) {
+                return;
+            }
+
+            android.graphics.RectF rect =
+                new android.graphics.RectF(
+                    0,
+                    0,
+                    getDrawable().getIntrinsicWidth(),
+                    getDrawable().getIntrinsicHeight()
+                );
+
+            matrix.mapRect(rect);
+
+            float dx = 0;
+            float dy = 0;
+
+            if (rect.width() <= getWidth()) {
+                dx = (getWidth() - rect.width()) / 2f - rect.left;
+            } else if (rect.left > 0) {
+                dx = -rect.left;
+            } else if (rect.right < getWidth()) {
+                dx = getWidth() - rect.right;
+            }
+
+            if (rect.height() <= getHeight()) {
+                dy = (getHeight() - rect.height()) / 2f - rect.top;
+            } else if (rect.top > 0) {
+                dy = -rect.top;
+            } else if (rect.bottom < getHeight()) {
+                dy = getHeight() - rect.bottom;
+            }
+
+            matrix.postTranslate(dx, dy);
+        }
+
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            scaleDetector.onTouchEvent(event);
+            gestureDetector.onTouchEvent(event);
+
+            switch (event.getActionMasked()) {
+
+                case MotionEvent.ACTION_DOWN:
+                    lastX = event.getX();
+                    lastY = event.getY();
+                    dragging = true;
+                    break;
+
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    dragging = false;
+                    break;
+
+                case MotionEvent.ACTION_MOVE:
+                    if (event.getPointerCount() == 1 &&
+                        dragging &&
+                        !scaleDetector.isInProgress() &&
+                        scale > 1f) {
+
+                        float x = event.getX();
+                        float y = event.getY();
+
+                        matrix.postTranslate(
+                            x - lastX,
+                            y - lastY
+                        );
+
+                        fixBounds();
+                        setImageMatrix(matrix);
+
+                        lastX = x;
+                        lastY = y;
+                    }
+                    break;
+
+                case MotionEvent.ACTION_POINTER_UP:
+                    dragging = false;
+                    break;
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    dragging = false;
+                    break;
+            }
+
+            return true;
         }
     }
 
