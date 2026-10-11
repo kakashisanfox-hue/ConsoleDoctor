@@ -33,10 +33,32 @@ jobs:
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Gerar APK
-        run: gradle assembleDebug --no-daemon
+      - name: Verificar XML do AndroidManifest
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          path = Path("app/src/main/AndroidManifest.xml")
+          data = path.read_bytes()
+
+          print("Tamanho:", len(data), "bytes")
+          print("Primeiros bytes:", repr(data[:100]))
+
+          try:
+              ET.fromstring(data)
+              print("XML válido!")
+          except ET.ParseError as error:
+              print("ERRO NO XML:", error)
+              raise
+          PY
+
+      - name: Gerar APK com diagnostico detalhado
+        run: |
+          gradle assembleDebug --no-daemon --stacktrace --info
 
       - name: Disponibilizar APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ConsoleDoctor-APK
