@@ -3,7 +3,11 @@ package com.matheusoblack.consoledoctor;
 
 import android.app.Activity;
 import android.app.Dialog;
+import android.app.AlertDialog;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.content.Intent;
 import android.net.Uri;
 import android.graphics.Color;
@@ -24,7 +28,16 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.GestureDetector;
 import android.widget.*;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.ByteArrayOutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
@@ -38,11 +51,25 @@ public class MainActivity extends Activity {
     private String model = "Slim / Super Slim";
     private String page = "home";
 
+    private static final int CAMERA_REQUEST = 101;
+    private static final int GALLERY_REQUEST = 102;
+
+    private static final String API_URL =
+        "https://console-doctor-api.kakashisanfox.workers.dev/analisar";
+
     private static final String GUIDE_IMAGE =
         "placas/file_00000000e1c0820ea38828394eb1f40e.png";
 
     private static final String SOURCE =
         "https://consolemods.org/wiki/Xbox_360:Error_Codes";
+
+    private Bitmap selectedPhoto;
+    private ImageView photoPreview;
+    private TextView analysisStatus;
+    private boolean analyzing = false;
+
+    private final Handler mainHandler =
+        new Handler(Looper.getMainLooper());
 
     private final String[][] entries = {
 
@@ -291,7 +318,7 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
 
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
+        if (Build.VERSION.SDK_INT >= 30) {
             getWindow().setDecorFitsSystemWindows(false);
         } else {
             getWindow().getDecorView().setSystemUiVisibility(
@@ -317,7 +344,7 @@ public class MainActivity extends Activity {
             int top;
             int bottom;
 
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
+            if (Build.VERSION.SDK_INT >= 30) {
                 android.graphics.Insets bars = insets.getInsets(
                     WindowInsets.Type.statusBars()
                     | WindowInsets.Type.navigationBars()
@@ -442,7 +469,12 @@ public class MainActivity extends Activity {
         button("LIGA E DESLIGA", () -> pending());
         button("LUZ VERMELHA — CÓDIGOS E SOLUÇÕES", () -> codes());
         button("DESBLOQUEIO", () -> pending());
-        button("IDENTIFICAR PLACA", () -> pending());
+
+        button(
+            "📷 IDENTIFICAR PLACA — IA",
+            () -> identifyScreen()
+        );
+
         button("SEM IMAGEM", () -> pending());
         button("LEITOR DE DISCO", () -> pending());
         button("DIAGNÓSTICO AVANÇADO", () -> pending());
@@ -455,6 +487,613 @@ public class MainActivity extends Activity {
             Toast.LENGTH_SHORT
         ).show();
     }
+
+    // ============================================
+    // IDENTIFICAÇÃO DE PLACA COM GEMINI
+    // ============================================
+
+    private void identifyScreen() {
+        page = "identify";
+        screen("IDENTIFICAR PLACA");
+
+        label(
+            "RECONHECIMENTO POR INTELIGÊNCIA ARTIFICIAL",
+            17, green
+        );
+
+        label(
+            "Fotografe a placa-mãe do Xbox 360 ou escolha uma imagem " +
+            "da galeria. O Console Doctor tentará identificar " +
+            "a revisão usando o Google Gemini.",
+            15, white
+        );
+
+        label(
+            "DICA: retire a placa do gabinete somente com o " +
+            "console desligado da tomada. Fotografe a placa " +
+            "inteira, com boa iluminação e sem reflexos.",
+            14, 0xffB7C9BE
+        );
+
+        button(
+            "📸 ABRIR CÂMERA",
+            () -> openCamera()
+        );
+
+        button(
+            "🖼️ ESCOLHER DA GALERIA",
+            () -> openGallery()
+        );
+
+        photoPreview = new ImageView(this);
+        photoPreview.setAdjustViewBounds(true);
+        photoPreview.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        photoPreview.setBackgroundColor(0xff1C3035);
+        photoPreview.setMinimumHeight(220);
+
+        LinearLayout.LayoutParams imageParams =
+            new LinearLayout.LayoutParams(-1, -2);
+        imageParams.setMargins(0, 16, 0, 16);
+
+        body.addView(photoPreview, imageParams);
+
+        if (selectedPhoto != null) {
+            photoPreview.setImageBitmap(selectedPhoto);
+            photoPreview.setOnClickListener(
+                v -> openZoom(selectedPhoto)
+            );
+        }
+
+        analysisStatus = new TextView(this);
+        analysisStatus.setText(
+            selectedPhoto == null
+                ? "Nenhuma fotografia selecionada."
+                : "Fotografia pronta para análise."
+        );
+        analysisStatus.setTextColor(white);
+        analysisStatus.setTextSize(15);
+        analysisStatus.setPadding(12, 16, 12, 16);
+        body.addView(analysisStatus);
+
+        button(
+            "🤖 ANALISAR PLACA COM IA",
+            () -> confirmAnalysis()
+        );
+
+        label(
+            "A análise precisa de internet e envia a fotografia " +
+            "para o serviço Gemini por meio do nosso servidor. " +
+            "O resultado é uma hipótese técnica e pode estar errado.",
+            13, 0xffFFBE7A
+        );
+
+        button("VOLTAR", () -> home());
+    }
+
+    private void openCamera() {
+        try {
+            Intent intent =
+                new Intent("android.media.action.IMAGE_CAPTURE");
+
+            if (intent.resolveActivity(
+                getPackageManager()
+            ) == null) {
+                Toast.makeText(
+                    this,
+                    "Nenhum aplicativo de câmera disponível.",
+                    Toast.LENGTH_LONG
+                ).show();
+                return;
+            }
+
+            startActivityForResult(
+                intent,
+                CAMERA_REQUEST
+            );
+
+        } catch (Exception e) {
+            Toast.makeText(
+                this,
+                "Não foi possível abrir a câmera.",
+                Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    private void openGallery() {
+        try {
+            Intent intent =
+                new Intent(Intent.ACTION_GET_CONTENT);
+
+            intent.setType("image/*");
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+            startActivityForResult(
+                Intent.createChooser(
+                    intent,
+                    "Escolha uma fotografia da placa"
+                ),
+                GALLERY_REQUEST
+            );
+
+        } catch (Exception e) {
+            Toast.makeText(
+                this,
+                "Não foi possível abrir a galeria.",
+                Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(
+        int requestCode,
+        int resultCode,
+        Intent data
+    ) {
+        super.onActivityResult(
+            requestCode,
+            resultCode,
+            data
+        );
+
+        if (resultCode != RESULT_OK || data == null) {
+            return;
+        }
+
+        try {
+            Bitmap bitmap = null;
+
+            if (requestCode == CAMERA_REQUEST) {
+                Bundle extras = data.getExtras();
+
+                if (extras != null) {
+                    Object photo = extras.get("data");
+
+                    if (photo instanceof Bitmap) {
+                        bitmap = (Bitmap) photo;
+                    }
+                }
+
+            } else if (requestCode == GALLERY_REQUEST) {
+                Uri uri = data.getData();
+
+                if (uri != null) {
+                    try (InputStream stream =
+                        getContentResolver().openInputStream(uri)) {
+
+                        BitmapFactory.Options options =
+                            new BitmapFactory.Options();
+
+                        options.inJustDecodeBounds = true;
+
+                        BitmapFactory.decodeStream(
+                            stream,
+                            null,
+                            options
+                        );
+
+                        int sample = 1;
+
+                        while (
+                            options.outWidth / sample > 1600 ||
+                            options.outHeight / sample > 1600
+                        ) {
+                            sample *= 2;
+                        }
+
+                        options.inJustDecodeBounds = false;
+                        options.inSampleSize = sample;
+
+                        try (InputStream second =
+                            getContentResolver().openInputStream(uri)) {
+
+                            bitmap = BitmapFactory.decodeStream(
+                                second,
+                                null,
+                                options
+                            );
+                        }
+                    }
+                }
+            }
+
+            if (bitmap == null) {
+                Toast.makeText(
+                    this,
+                    "Não foi possível carregar a fotografia.",
+                    Toast.LENGTH_LONG
+                ).show();
+                return;
+            }
+
+            selectedPhoto = resizeBitmap(bitmap, 1400);
+
+            identifyScreen();
+
+        } catch (Exception e) {
+            Toast.makeText(
+                this,
+                "Erro ao carregar imagem: " + e.getMessage(),
+                Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    private Bitmap resizeBitmap(
+        Bitmap source,
+        int maxSize
+    ) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+
+        if (width <= maxSize && height <= maxSize) {
+            return source;
+        }
+
+        float factor = Math.min(
+            (float) maxSize / width,
+            (float) maxSize / height
+        );
+
+        int newWidth = Math.max(
+            1,
+            Math.round(width * factor)
+        );
+
+        int newHeight = Math.max(
+            1,
+            Math.round(height * factor)
+        );
+
+        return Bitmap.createScaledBitmap(
+            source,
+            newWidth,
+            newHeight,
+            true
+        );
+    }
+
+    private void confirmAnalysis() {
+        if (analyzing) {
+            Toast.makeText(
+                this,
+                "Já existe uma análise em andamento.",
+                Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+
+        if (selectedPhoto == null) {
+            Toast.makeText(
+                this,
+                "Tire uma foto ou escolha uma imagem primeiro.",
+                Toast.LENGTH_LONG
+            ).show();
+            return;
+        }
+
+        new AlertDialog.Builder(this)
+            .setTitle("Enviar fotografia?")
+            .setMessage(
+                "A fotografia será enviada pela internet " +
+                "ao nosso servidor Cloudflare e ao Google Gemini " +
+                "para análise. Evite incluir pessoas, documentos " +
+                "ou informações pessoais na imagem.\n\n" +
+                "Deseja continuar?"
+            )
+            .setNegativeButton("Cancelar", null)
+            .setPositiveButton(
+                "ENVIAR E ANALISAR",
+                (dialog, which) -> analyzePhoto()
+            )
+            .show();
+    }
+
+    private void analyzePhoto() {
+        if (selectedPhoto == null || analyzing) {
+            return;
+        }
+
+        analyzing = true;
+
+        if (analysisStatus != null) {
+            analysisStatus.setText(
+                "Enviando fotografia e aguardando o Gemini..."
+            );
+        }
+
+        final Bitmap photo = selectedPhoto;
+
+        new Thread(() -> {
+            HttpURLConnection connection = null;
+
+            try {
+                ByteArrayOutputStream output =
+                    new ByteArrayOutputStream();
+
+                photo.compress(
+                    Bitmap.CompressFormat.JPEG,
+                    80,
+                    output
+                );
+
+                byte[] imageBytes = output.toByteArray();
+
+                if (imageBytes.length > 4 * 1024 * 1024) {
+                    throw new Exception(
+                        "A fotografia ultrapassou 4 MB."
+                    );
+                }
+
+                URL url = new URL(API_URL);
+
+                connection = (HttpURLConnection)
+                    url.openConnection();
+
+                connection.setRequestMethod("POST");
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(60000);
+                connection.setDoOutput(true);
+                connection.setRequestProperty(
+                    "Content-Type",
+                    "image/jpeg"
+                );
+                connection.setRequestProperty(
+                    "Accept",
+                    "application/json"
+                );
+                connection.setFixedLengthStreamingMode(
+                    imageBytes.length
+                );
+
+                try (OutputStream stream =
+                    connection.getOutputStream()) {
+
+                    stream.write(imageBytes);
+                    stream.flush();
+                }
+
+                int status = connection.getResponseCode();
+
+                InputStream responseStream =
+                    status >= 200 && status < 300
+                        ? connection.getInputStream()
+                        : connection.getErrorStream();
+
+                if (responseStream == null) {
+                    throw new Exception(
+                        "Servidor não retornou uma resposta."
+                    );
+                }
+
+                ByteArrayOutputStream responseOutput =
+                    new ByteArrayOutputStream();
+
+                try (InputStream stream = responseStream) {
+                    byte[] buffer = new byte[4096];
+                    int count;
+
+                    while ((count = stream.read(buffer)) != -1) {
+                        responseOutput.write(
+                            buffer,
+                            0,
+                            count
+                        );
+
+                        if (responseOutput.size() > 1024 * 1024) {
+                            throw new Exception(
+                                "Resposta do servidor muito grande."
+                            );
+                        }
+                    }
+                }
+
+                String responseText = new String(
+                    responseOutput.toByteArray(),
+                    StandardCharsets.UTF_8
+                );
+
+                JSONObject response =
+                    new JSONObject(responseText);
+
+                if (status < 200 || status >= 300) {
+                    String message = response.optString(
+                        "erro",
+                        "Falha na análise."
+                    );
+
+                    int code = response.optInt("codigo", 0);
+
+                    if (code != 0) {
+                        message += " (Gemini HTTP " + code + ")";
+                    }
+
+                    throw new Exception(message);
+                }
+
+                if (!response.optBoolean("sucesso", false)) {
+                    throw new Exception(
+                        response.optString(
+                            "erro",
+                            "Não foi possível identificar a placa."
+                        )
+                    );
+                }
+
+                JSONObject analysis =
+                    response.optJSONObject("analise");
+
+                if (analysis == null) {
+                    throw new Exception(
+                        "O servidor não retornou os dados da placa."
+                    );
+                }
+
+                mainHandler.post(() -> {
+                    analyzing = false;
+
+                    if (!isFinishing()) {
+                        showAnalysisResult(analysis);
+                    }
+                });
+
+            } catch (Exception e) {
+                final String message =
+                    e.getMessage() == null
+                        ? "Falha desconhecida."
+                        : e.getMessage();
+
+                mainHandler.post(() -> {
+                    analyzing = false;
+
+                    if (!isFinishing()) {
+                        if (page.equals("identify") &&
+                            analysisStatus != null) {
+
+                            analysisStatus.setText(
+                                "Erro: " + message
+                            );
+                        }
+
+                        Toast.makeText(
+                            MainActivity.this,
+                            "Análise não concluída: " + message,
+                            Toast.LENGTH_LONG
+                        ).show();
+                    }
+                });
+
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
+            }
+        }).start();
+    }
+
+    private void showAnalysisResult(JSONObject analysis) {
+        page = "analysis";
+        screen("RESULTADO DA IA");
+
+        String board = analysis.optString(
+            "placa",
+            "Não identificada"
+        );
+
+        String consoleModel = analysis.optString(
+            "modelo",
+            "Desconhecido"
+        );
+
+        String confidence = analysis.optString(
+            "confianca",
+            "Baixa"
+        );
+
+        section(
+            "PLACA-MÃE PROVÁVEL",
+            board
+        );
+
+        section(
+            "MODELO DO CONSOLE",
+            consoleModel
+        );
+
+        section(
+            "CONFIANÇA INFORMADA PELA IA",
+            confidence
+        );
+
+        label(
+            "ATENÇÃO: o nível de confiança é uma avaliação " +
+            "textual gerada pela IA, não uma porcentagem " +
+            "estatisticamente validada. Confirme a revisão " +
+            "com características físicas e documentação técnica.",
+            14,
+            0xffFFBE7A
+        );
+
+        addJsonList(
+            "EVIDÊNCIAS VISUAIS",
+            analysis.optJSONArray("evidencias")
+        );
+
+        addJsonList(
+            "POSSÍVEIS DEFEITOS",
+            analysis.optJSONArray("defeitos_possiveis")
+        );
+
+        addJsonList(
+            "TESTES RECOMENDADOS",
+            analysis.optJSONArray("testes_recomendados")
+        );
+
+        section(
+            "OBSERVAÇÃO TÉCNICA",
+            analysis.optString(
+                "observacao",
+                "Confirme a revisão antes de realizar reparos."
+            )
+        );
+
+        section(
+            "PRÓXIMO PASSO",
+            "Se o console apresentar luz vermelha, " +
+            "consulte o código secundário na biblioteca " +
+            "do Console Doctor. A revisão da placa, " +
+            "sozinha, não determina o defeito."
+        );
+
+        button(
+            "CONSULTAR CÓDIGOS DE ERRO",
+            () -> codes()
+        );
+
+        button(
+            "ANALISAR OUTRA FOTO",
+            () -> {
+                selectedPhoto = null;
+                identifyScreen();
+            }
+        );
+
+        button(
+            "VOLTAR AO INÍCIO",
+            () -> home()
+        );
+    }
+
+    private void addJsonList(
+        String title,
+        JSONArray array
+    ) {
+        StringBuilder text = new StringBuilder();
+
+        if (array != null) {
+            for (int i = 0; i < array.length(); i++) {
+                String item = array.optString(i, "");
+
+                if (!item.trim().isEmpty()) {
+                    text.append("• ")
+                        .append(item)
+                        .append("\n\n");
+                }
+            }
+        }
+
+        section(
+            title,
+            text.length() > 0
+                ? text.toString().trim()
+                : "Nenhuma informação confiável disponível."
+        );
+    }
+
+    // ============================================
+    // BIBLIOTECA DE ERROS
+    // ============================================
 
     private void codes() {
         page = "codes";
@@ -652,6 +1291,10 @@ public class MainActivity extends Activity {
 
         button("VOLTAR AOS CÓDIGOS", () -> codes());
     }
+
+    // ============================================
+    // IMAGENS E ZOOM
+    // ============================================
 
     private Bitmap loadBitmap(String filename) throws Exception {
         try (InputStream stream = getAssets().open(filename)) {
@@ -975,11 +1618,14 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (page.equals("home")) {
             super.onBackPressed();
-        } else if (
-            page.equals("detail") ||
-            page.equals("howto")
-        ) {
+
+        } else if (page.equals("detail") ||
+                   page.equals("howto")) {
             codes();
+
+        } else if (page.equals("analysis")) {
+            identifyScreen();
+
         } else {
             home();
         }
