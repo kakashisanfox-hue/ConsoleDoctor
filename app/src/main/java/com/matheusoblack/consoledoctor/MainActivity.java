@@ -1,3 +1,4 @@
+
 package com.matheusoblack.consoledoctor;
 
 import android.app.Activity;
@@ -5,17 +6,20 @@ import android.os.Bundle;
 import android.content.Intent;
 import android.net.Uri;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.content.res.ColorStateList;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.*;
 
 public class MainActivity extends Activity {
 
     private LinearLayout body;
-    private final int bg = 0xff101519;
-    private final int green = 0xff226c48;
+    private final int bg = 0xff0C1218;
+    private final int green = 0xff4AF0A1;
     private final int white = Color.WHITE;
 
     private String model = "Slim / Super Slim";
@@ -24,7 +28,7 @@ public class MainActivity extends Activity {
     private static final String SOURCE =
         "https://consolemods.org/wiki/Xbox_360:Error_Codes";
 
-    // Código, sistema, significado, causas, testes e reparos
+    // Código, categoria, descrição, causas, testes, soluções
     private final String[][] entries = {
 
         {"0001","Alimentação",
@@ -271,49 +275,121 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(Color.BLACK);
+
         home();
     }
 
     private void screen(String title) {
         ScrollView sc = new ScrollView(this);
         sc.setBackgroundColor(bg);
+        sc.setFillViewport(true);
+        sc.setClipToPadding(false);
+
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            sc.setOnApplyWindowInsetsListener((v, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(
+                    android.view.WindowInsets.Type.statusBars()
+                    | android.view.WindowInsets.Type.navigationBars()
+                );
+                sc.setPadding(0, bars.top, 0, bars.bottom);
+                return insets;
+            });
+        }
 
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(22, 28, 22, 36);
+        body.setPadding(24, 28, 24, 40);
 
         sc.addView(body);
         setContentView(sc);
 
-        label(title, 25, 0xff49db93);
+        TextView heading = new TextView(this);
+        heading.setText(title);
+        heading.setTextSize(27);
+        heading.setTypeface(
+            Typeface.create(
+                "sans-serif-condensed",
+                Typeface.BOLD
+            )
+        );
+        heading.setLetterSpacing(0.045f);
+        heading.setTextColor(green);
+        heading.setPadding(10, 18, 10, 22);
+        body.addView(heading);
+
+        View line = new View(this);
+        line.setBackgroundColor(0xff285846);
+
+        LinearLayout.LayoutParams lp =
+            new LinearLayout.LayoutParams(-1, 2);
+        lp.setMargins(8, 0, 8, 20);
+        body.addView(line, lp);
     }
 
     private void label(String s, int size, int color) {
         TextView t = new TextView(this);
         t.setText(s);
         t.setTextSize(size);
-        t.setTextColor(color);
-        t.setPadding(10, 12, 10, 12);
+        t.setTextColor(
+            color == white ? 0xffF0F7F4 : color
+        );
+        t.setTypeface(
+            Typeface.create(
+                "sans-serif-medium",
+                Typeface.NORMAL
+            )
+        );
+        t.setLineSpacing(5, 1.08f);
+        t.setPadding(12, 12, 12, 16);
         body.addView(t);
     }
 
     private void button(String s, Runnable r) {
-        Button b = new Button(this);
-        b.setText(s);
-        b.setAllCaps(false);
-        b.setTextColor(white);
-        b.setBackgroundTintList(
-            ColorStateList.valueOf(green)
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.HORIZONTAL);
+        container.setGravity(Gravity.CENTER_VERTICAL);
+        container.setPadding(18, 6, 16, 6);
+
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(0xff1C3035);
+        shape.setCornerRadius(22);
+        shape.setStroke(2, 0xff315B4C);
+
+        container.setBackground(shape);
+        container.setElevation(5f);
+
+        TextView text = new TextView(this);
+        text.setText(s);
+        text.setTextSize(16);
+        text.setTextColor(0xffF3FFF8);
+        text.setTypeface(
+            Typeface.create(
+                "sans-serif-medium",
+                Typeface.BOLD
+            )
+        );
+        text.setPadding(6, 20, 8, 20);
+
+        container.addView(
+            text,
+            new LinearLayout.LayoutParams(0, -2, 1)
         );
 
-        LinearLayout.LayoutParams p =
-            new LinearLayout.LayoutParams(-1, -2);
-        p.setMargins(0, 5, 0, 5);
+        TextView arrow = new TextView(this);
+        arrow.setText("›");
+        arrow.setTextSize(30);
+        arrow.setTextColor(green);
+        container.addView(arrow);
 
-        body.addView(b, p);
-        b.setOnClickListener(v -> r.run());
+        LinearLayout.LayoutParams params =
+            new LinearLayout.LayoutParams(-1, -2);
+        params.setMargins(0, 7, 0, 7);
+
+        body.addView(container, params);
+        container.setOnClickListener(v -> r.run());
     }
 
     private void open(String url) {
@@ -442,6 +518,12 @@ public class MainActivity extends Activity {
             b.setText(e[0] + " — " + e[1]);
             b.setAllCaps(false);
             b.setTextColor(white);
+            b.setTypeface(
+                Typeface.create(
+                    "sans-serif-medium",
+                    Typeface.BOLD
+                )
+            );
             b.setBackgroundTintList(
                 ColorStateList.valueOf(0xff294338)
             );
@@ -452,7 +534,7 @@ public class MainActivity extends Activity {
     }
 
     private void section(String title, String content) {
-        label(title, 19, 0xff49db93);
+        label(title, 19, green);
         label(content, 16, white);
     }
 
@@ -462,7 +544,7 @@ public class MainActivity extends Activity {
 
         label(
             "Modelo selecionado: " + model,
-            15, 0xffb7c9be
+            15, 0xffB7C9BE
         );
 
         section("O QUE SIGNIFICA", e[2]);
