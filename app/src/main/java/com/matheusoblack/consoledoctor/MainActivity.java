@@ -2,18 +2,23 @@
 package com.matheusoblack.consoledoctor;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.os.Bundle;
 import android.content.Intent;
 import android.net.Uri;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.GradientDrawable;
 import android.content.res.ColorStateList;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
+import android.view.Window;
 import android.widget.*;
+import java.io.InputStream;
 
 public class MainActivity extends Activity {
 
@@ -25,10 +30,9 @@ public class MainActivity extends Activity {
     private String model = "Slim / Super Slim";
     private String page = "home";
 
-    private static final String SOURCE =
-        "https://consolemods.org/wiki/Xbox_360:Error_Codes";
+    private static final String BOARD_IMAGE =
+        "placas/Xbox_360_S,_model_1439_-_motherboard-0339.jpg";
 
-    // Código, categoria, descrição, causas, testes, soluções
     private final String[][] entries = {
 
         {"0001","Alimentação",
@@ -275,10 +279,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
-
         getWindow().setStatusBarColor(bg);
         getWindow().setNavigationBarColor(Color.BLACK);
-
         home();
     }
 
@@ -288,16 +290,25 @@ public class MainActivity extends Activity {
         sc.setFillViewport(true);
         sc.setClipToPadding(false);
 
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            sc.setOnApplyWindowInsetsListener((v, insets) -> {
+        sc.setOnApplyWindowInsetsListener((v, insets) -> {
+            int top;
+            int bottom;
+
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
                 android.graphics.Insets bars = insets.getInsets(
                     android.view.WindowInsets.Type.statusBars()
                     | android.view.WindowInsets.Type.navigationBars()
                 );
-                sc.setPadding(0, bars.top, 0, bars.bottom);
-                return insets;
-            });
-        }
+                top = bars.top;
+                bottom = bars.bottom;
+            } else {
+                top = insets.getSystemWindowInsetTop();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+
+            sc.setPadding(0, top, 0, bottom);
+            return insets;
+        });
 
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
@@ -310,10 +321,7 @@ public class MainActivity extends Activity {
         heading.setText(title);
         heading.setTextSize(27);
         heading.setTypeface(
-            Typeface.create(
-                "sans-serif-condensed",
-                Typeface.BOLD
-            )
+            Typeface.create("sans-serif-condensed", Typeface.BOLD)
         );
         heading.setLetterSpacing(0.045f);
         heading.setTextColor(green);
@@ -333,14 +341,9 @@ public class MainActivity extends Activity {
         TextView t = new TextView(this);
         t.setText(s);
         t.setTextSize(size);
-        t.setTextColor(
-            color == white ? 0xffF0F7F4 : color
-        );
+        t.setTextColor(color == white ? 0xffF0F7F4 : color);
         t.setTypeface(
-            Typeface.create(
-                "sans-serif-medium",
-                Typeface.NORMAL
-            )
+            Typeface.create("sans-serif-medium", Typeface.NORMAL)
         );
         t.setLineSpacing(5, 1.08f);
         t.setPadding(12, 12, 12, 16);
@@ -366,10 +369,7 @@ public class MainActivity extends Activity {
         text.setTextSize(16);
         text.setTextColor(0xffF3FFF8);
         text.setTypeface(
-            Typeface.create(
-                "sans-serif-medium",
-                Typeface.BOLD
-            )
+            Typeface.create("sans-serif-medium", Typeface.BOLD)
         );
         text.setPadding(6, 20, 8, 20);
 
@@ -436,10 +436,7 @@ public class MainActivity extends Activity {
 
         Spinner spin = new Spinner(this);
 
-        String[] models = {
-            "Slim / Super Slim",
-            "Fat"
-        };
+        String[] models = {"Slim / Super Slim", "Fat"};
 
         ArrayAdapter<String> a = new ArrayAdapter<>(
             this,
@@ -453,9 +450,7 @@ public class MainActivity extends Activity {
 
         spin.setOnItemSelectedListener(
             new AdapterView.OnItemSelectedListener() {
-                public void onNothingSelected(
-                    AdapterView<?> p
-                ) {}
+                public void onNothingSelected(AdapterView<?> p) {}
 
                 public void onItemSelected(
                     AdapterView<?> p,
@@ -519,10 +514,7 @@ public class MainActivity extends Activity {
             b.setAllCaps(false);
             b.setTextColor(white);
             b.setTypeface(
-                Typeface.create(
-                    "sans-serif-medium",
-                    Typeface.BOLD
-                )
+                Typeface.create("sans-serif-medium", Typeface.BOLD)
             );
             b.setBackgroundTintList(
                 ColorStateList.valueOf(0xff294338)
@@ -567,6 +559,17 @@ public class MainActivity extends Activity {
             );
         }
 
+        if (e[0].equals("0003") && !model.equals("Fat")) {
+            section(
+                "FOTO DA PLACA-MÃE",
+                "Waitsburg (Corona V3/V4) — PCB X862605-002.\n" +
+                "Imagem de referência para identificação. " +
+                "Os pontos de teste ainda não estão marcados."
+            );
+
+            showBoardImage();
+        }
+
         section("POSSÍVEIS ÁREAS COM DEFEITO", e[3]);
         section("SEQUÊNCIA DE TESTES", e[4]);
         section("POSSÍVEIS SOLUÇÕES", e[5]);
@@ -581,22 +584,88 @@ public class MainActivity extends Activity {
         );
 
         button(
-            "ABRIR REFERÊNCIA TÉCNICA",
-            () -> open(SOURCE)
+            "VER REPAROS EM PORTUGUÊS",
+            () -> open(
+                "https://www.google.com/search?q=" +
+                Uri.encode(
+                    "Xbox 360 " + model +
+                    " erro " + e[0] + " reparo"
+                )
+            )
         );
 
         button(
-            "PESQUISAR VÍDEOS",
+            "PESQUISAR VÍDEOS EM PORTUGUÊS",
             () -> open(
                 "https://www.youtube.com/results?search_query=" +
                 Uri.encode(
                     "Xbox 360 " + model +
-                    " error " + e[0] + " repair"
+                    " erro " + e[0] +
+                    " conserto português"
                 )
             )
         );
 
         button("VOLTAR AOS CÓDIGOS", () -> codes());
+    }
+
+    private void showBoardImage() {
+        try {
+            InputStream stream = getAssets().open(BOARD_IMAGE);
+            Bitmap bitmap = BitmapFactory.decodeStream(stream);
+            stream.close();
+
+            if (bitmap == null) {
+                throw new Exception("Imagem inválida");
+            }
+
+            ImageView preview = new ImageView(this);
+            preview.setImageBitmap(bitmap);
+            preview.setAdjustViewBounds(true);
+            preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            preview.setBackgroundColor(0xff1C3035);
+
+            LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(-1, -2);
+            params.setMargins(0, 12, 0, 12);
+            body.addView(preview, params);
+
+            preview.setOnClickListener(v -> {
+                Dialog dialog = new Dialog(this);
+
+                ImageView enlarged = new ImageView(this);
+                enlarged.setImageBitmap(bitmap);
+                enlarged.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                enlarged.setBackgroundColor(Color.BLACK);
+
+                dialog.setContentView(enlarged);
+                dialog.show();
+
+                Window window = dialog.getWindow();
+                if (window != null) {
+                    window.setLayout(-1, -1);
+                }
+            });
+
+            label(
+                "Toque na fotografia para ampliar.",
+                14, 0xffB7C9BE
+            );
+
+            label(
+                "Crédito da fotografia: Raimond Spekking / " +
+                "Wikimedia Commons. Consulte a página original " +
+                "para os termos da licença.",
+                12, 0xff9BAFA7
+            );
+
+        } catch (Exception ex) {
+            label(
+                "Não foi possível carregar a fotografia. " +
+                "Confira o nome do arquivo em assets/placas.",
+                14, 0xffFFAA88
+            );
+        }
     }
 
     private void howTo() {
